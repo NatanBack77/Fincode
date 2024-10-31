@@ -1,0 +1,34 @@
+version: '3'
+services:
+  redis:
+    image: redis:latest
+    container_name: redis
+    ports:
+      - '6379:6379'
+    networks:
+      - fincode
+    volumes:
+      - fincode:/data
+
+  postgres:
+    image: postgres:latest
+    container_name: postgres
+    restart: always
+    ports:
+      - 5432:5432
+    volumes:
+      - fincode:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_PASSWORD=S3cret
+      - POSTGRES_USER=fincode
+      - POSTGRES_DB=fincode
+    networks:
+      - fincode
+networks:
+  fincode:
+    driver: bridge
+volumes:
+  fincode:
+
+  
+   

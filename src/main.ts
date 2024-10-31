@@ -10,8 +10,8 @@ async function bootstrap() {
   app.useGlobalPipes();
   const config = new DocumentBuilder()
     .addBearerAuth()
-    .setTitle('User Documentatiom')
-    .setDescription('The User API description')
+    .setTitle('FinCode Documentatiom')
+    .setDescription('The Fin API description')
     .setVersion('1.0')
     .addTag('user')
     .build();

@@ -20,6 +20,7 @@ model User {
   password String @db.Text
   user_Role  UserType @default(USER)
 }
+model 
 
 enum UserType{
   ADMIN
