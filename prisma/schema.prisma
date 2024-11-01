@@ -14,15 +14,18 @@ datasource db {
 }
 
 model User {
-  id    String    @id @default(uuid()) @db.Uuid
-  name String @db.Text 
-  email String @db.Text 
-  password String @db.Text
-  user_Role  UserType @default(USER)
+  id                   String    @id @default(uuid()) @db.Uuid
+  name                 String    @db.Text
+  email                String    @db.Text
+  password             String    @db.Text
+  user_Role            UserType  @default(USER)
+  resetPasswordToken   String?   @db.Text
+  resetPasswordExpires DateTime? @default(now()) @db.Timestamptz(3)
+  createdAt            DateTime? @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime? @default(now()) @db.Timestamptz(3)
 }
-model 
 
-enum UserType{
+enum UserType {
   ADMIN
   USER
 }
