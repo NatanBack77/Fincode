@@ -12,7 +12,11 @@ import {
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { AuthGuard } from './auth.guard';
-import { UserAuth } from './dtos/user.dtos';
+import {
+  RequestResetPasswordDto,
+  ResetPasswordDto,
+  UserAuth,
+} from './dtos/user.dtos';
 import { UserService } from 'src/user/user.service';
 import * as bcrypt from 'bcrypt';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
@@ -60,6 +64,22 @@ export class AuthController {
 
     return res.status(HttpStatus.OK).json({ message: 'Logout bem-sucedido' });
   }
+
+  @Post('reset-password')
+  async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
+    return this.authService.resetPassword(
+      resetPasswordDto.token,
+      resetPasswordDto.newPassword,
+    );
+  }
+
+  @Post('request-password-reset')
+  async requestPasswordReset(
+    @Body() requestResestPassword: RequestResetPasswordDto,
+  ) {
+    return this.authService.requestPasswordReset(requestResestPassword.email);
+  }
+
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
   @HttpCode(HttpStatus.OK)

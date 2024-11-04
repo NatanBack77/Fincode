@@ -16,7 +16,7 @@ datasource db {
 model User {
   id                   String    @id @default(uuid()) @db.Uuid
   name                 String    @db.Text
-  email                String    @db.Text
+  email                String    @db.Text @unique
   password             String    @db.Text
   user_Role            UserType  @default(USER)
   resetPasswordToken   String?   @db.Text
