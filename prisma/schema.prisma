@@ -14,15 +14,48 @@ datasource db {
 }
 
 model User {
-  id                   String    @id @default(uuid()) @db.Uuid
-  name                 String    @db.Text
-  email                String    @db.Text @unique
-  password             String    @db.Text
-  user_Role            UserType  @default(USER)
-  resetPasswordToken   String?   @db.Text
-  resetPasswordExpires DateTime? @default(now()) @db.Timestamptz(3)
-  createdAt            DateTime? @default(now()) @db.Timestamptz(3)
-  updatedAt            DateTime? @default(now()) @db.Timestamptz(3)
+  id                   String          @id @default(uuid()) @db.Uuid
+  name                 String          @db.Text
+  email                String          @unique @db.Text
+  password             String          @db.Text
+  user_Role            UserType        @default(USER)
+  resetPasswordToken   String?         @db.Text
+  costumerId           String?         @db.Text
+  resetPasswordExpires DateTime?       @default(now()) @db.Timestamptz(3)
+  createdAt            DateTime?       @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime?       @default(now()) @db.Timestamptz(3)
+  Subscriptions        Subscriptions[]
+}
+
+model Products {
+  id          String    @id @default(uuid()) @db.Uuid
+  name        String    @db.Text
+  description String    @db.Text
+  Prices      Prices[]
+  createdAt   DateTime? @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime? @default(now()) @db.Timestamptz(3)
+}
+
+model Prices {
+  id              String    @id @default(uuid()) @db.Uuid
+  currency        String    @default("BRL") @db.Text
+  unit_amout      Int       @db.Integer
+  product_id      String    @db.Uuid
+  stripeProductId String    @db.Text
+  recurring       String?   @db.Text
+  Products        Products  @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  createdAt       DateTime? @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime? @default(now()) @db.Timestamptz(3)
+}
+
+model Subscriptions {
+  id                 String    @id @default(uuid()) @db.Uuid
+  subscriptionId     String    @db.Text
+  subscriptionStatus String    @db.Text
+  userId             String    @db.Uuid
+  User               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt          DateTime? @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime? @default(now()) @db.Timestamptz(3)
 }
 
 enum UserType {

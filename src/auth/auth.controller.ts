@@ -44,6 +44,7 @@ export class AuthController {
     if (!isEqualPassword) {
       throw new BadRequestException('usuário ou senha incorreta');
     }
+
     const token = await this.authService.generateToken({ sub: validator.id });
     return { access_token: token };
   }

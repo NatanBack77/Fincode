@@ -8,6 +8,8 @@ import { UserModule } from './user/user.module';
 import { RedisController } from './redis/redis.controller';
 import { RedisModule } from './redis/redis.module';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { StripeController } from './stripe/stripe.controller';
+import { StripeModule } from './stripe/stripe.module';
 
 @Module({
   imports: [
@@ -17,8 +19,9 @@ import { ThrottlerModule } from '@nestjs/throttler';
     PrismaModule,
     UserModule,
     RedisModule,
+    StripeModule.forRootAsync(),
   ],
-  controllers: [AppController, RedisController],
+  controllers: [AppController, RedisController, StripeController],
   providers: [AppService],
 })
 export class AppModule {}
