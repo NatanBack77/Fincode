@@ -12,7 +12,7 @@ export class StripeModule {
   static forRootAsync(): DynamicModule {
     return {
       module: StripeModule,
-      imports: [ConfigModule.forRoot(), PrismaModule, RedisModule, UserModule], // Importando PrismaModule
+      imports: [ConfigModule.forRoot(), PrismaModule, RedisModule, UserModule],
       controllers: [StripeController],
       providers: [
         StripeService,

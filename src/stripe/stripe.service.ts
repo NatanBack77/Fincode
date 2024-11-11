@@ -24,7 +24,8 @@ export class StripeService {
       const stripeProductsExists = await this.stripe.products.search({
         query: `name:"${data.name}"`,
       });
-      if (existsProducts || stripeProductsExists) {
+      console.log('stripeProducts', stripeProductsExists.data);
+      if (existsProducts || stripeProductsExists.data.length > 0) {
         throw new BadRequestException('Produto já existe');
       }
 
@@ -50,20 +51,22 @@ export class StripeService {
     stripeProductId: string,
     data: CreatePrice,
   ) {
+    const price = await this.stripe.prices.create({
+      unit_amount: data.unitAmout,
+      currency: data.currency,
+      recurring: { interval: data.interval },
+      product: stripeProductId,
+    });
+
     await this.prisma.prices.create({
       data: {
         product_id: productId,
         stripeProductId,
         unit_amout: data.unitAmout,
         currency: data.currency,
+        priceId: price.id,
         recurring: data.interval,
       },
-    });
-    const price = await this.stripe.prices.create({
-      unit_amount: data.unitAmout,
-      currency: data.currency,
-      recurring: { interval: data.interval },
-      product: stripeProductId,
     });
     return price.id;
   }
@@ -78,29 +81,36 @@ export class StripeService {
         name: true,
       },
     });
-    const constumerExists = await this.stripe.customers.list({
+    if (!user) {
+      throw new BadRequestException('Usuário não existe');
+    }
+
+    const customerExists = await this.stripe.customers.list({
       email: user.email,
     });
 
-    if (constumerExists) {
-      return constumerExists[0].id;
+    if (customerExists.data.length > 0) {
+      return customerExists.data[0].id;
     }
-    const customer = await this.stripe.customers.create({
+    const Customer = await this.stripe.customers.create({
       name: user.name,
       email: user.email,
-      // payment_method: paymentMethod,
-      // invoice_settings: { default_payment_method: paymentMethod },
+      // payment_method: 'pm_card_visa',
+      // invoice_settings: {
+      //   default_payment_method: 'pm_card_visa',
+      // },
     });
 
+    console.log('test2', Customer.id);
     await this.prisma.user.update({
       where: {
         id: id,
       },
       data: {
-        costumerId: customer.id,
+        costumerId: Customer.id,
       },
     });
-    return customer.id;
+    return Customer.id;
   }
 
   async createSubscription(id: string, priceId: string) {
@@ -128,6 +138,8 @@ export class StripeService {
       success_url: successUrl,
       cancel_url: cancelUrl,
     });
-    return session;
+    return {
+      url: session.url,
+    };
   }
 }

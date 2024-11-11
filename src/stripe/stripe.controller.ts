@@ -13,7 +13,11 @@ import { AuthGuard } from 'src/auth/auth.guard';
 import { RolesGuard } from 'src/auth/role.guard';
 import { Roles } from 'src/auth/roles.decorator';
 import { UserType } from 'src/auth/user-type.enum';
-import { createProductsController } from './dtos/stripe.dto';
+import {
+  CreateCheckoutSession,
+  createProductsController,
+  createSubscription,
+} from './dtos/stripe.dto';
 
 @ApiTags('stripe')
 @Controller('stripe')
@@ -49,7 +53,7 @@ export class StripeController {
   @Post('create-customer')
   async createCustomer(@Req() req) {
     const userId = req.user.sub;
-    console.log("User", userId);
+    console.log('User', userId);
     await this.stripeService.createCostumers(userId);
   }
 
@@ -58,25 +62,26 @@ export class StripeController {
   @UseGuards(AuthGuard, RolesGuard)
   @Roles(UserType.Admin, UserType.User)
   @Post('create-subscription')
-  async createSubscription(@Req() req, @Body() priceId: string) {
+  async createSubscription(@Req() req, @Body() data: createSubscription) {
     const userId = req.user.sub;
-    await this.stripeService.createSubscription(userId, priceId);
+    console.log('user', userId);
+
+    await this.stripeService.createSubscription(userId, data.priceId);
   }
   @HttpCode(HttpStatus.CREATED)
   @ApiBearerAuth()
   @UseGuards(AuthGuard, RolesGuard)
   @Roles(UserType.Admin, UserType.User)
   @Post('create-checkout-session')
-  async createCheckoutSession(
-    @Req() req,
-    @Body() data: { priceId: string; successUrl: string; cancelUrl: string },
-  ) {
+  async createCheckoutSession(@Req() req, @Body() data: CreateCheckoutSession) {
     const userId = req.user.sub;
-    await this.stripeService.createCheckoutSession(
+
+    const checkout = await this.stripeService.createCheckoutSession(
       userId,
       data.successUrl,
       data.cancelUrl,
       data.priceId,
     );
+    return checkout.url;
   }
 }

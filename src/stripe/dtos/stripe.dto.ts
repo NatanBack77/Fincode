@@ -60,6 +60,29 @@ export class createProductsController {
   @IsEnum(Interval)
   interval: Interval;
 }
+export class createSubscription {
+  @ApiProperty()
+  @IsNotEmpty()
+  @IsString()
+  priceId: string;
+}
+
+export class CreateCheckoutSession {
+  @ApiProperty()
+  @IsNotEmpty()
+  @IsString()
+  priceId: string;
+
+  @ApiProperty()
+  @IsNotEmpty()
+  @IsString()
+  successUrl: string;
+
+  @ApiProperty()
+  @IsNotEmpty()
+  @IsString()
+  cancelUrl: string;
+}
 export class GetUserId {
   @ApiProperty()
   @IsNotEmpty()

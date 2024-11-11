@@ -39,6 +39,7 @@ model Products {
 model Prices {
   id              String    @id @default(uuid()) @db.Uuid
   currency        String    @default("BRL") @db.Text
+  priceId         String    @default("null") @db.Text
   unit_amout      Int       @db.Integer
   product_id      String    @db.Uuid
   stripeProductId String    @db.Text
