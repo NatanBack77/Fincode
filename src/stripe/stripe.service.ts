@@ -115,11 +115,31 @@ export class StripeService {
 
   async createSubscription(id: string, priceId: string) {
     const customerId = await this.createCostumers(id);
-
+    const existSubscriptions = await this.prisma.subscriptions.findFirst({
+      where: {
+        userId: id,
+      },
+    });
+    if (existSubscriptions) {
+      return existSubscriptions.subscriptionId;
+    }
     const subscription = await this.stripe.subscriptions.create({
       customer: customerId,
       items: [{ price: priceId }],
       expand: ['latest_invoice.payment_intent'],
+    });
+    const Price = await this.prisma.prices.findFirst({
+      where: {
+        priceId: priceId,
+      },
+    });
+    await this.prisma.subscriptions.create({
+      data: {
+        subscriptionId: subscription.id,
+        pricesId: Price.id,
+        userId: id,
+        hasActiveSubscription: false,
+      },
     });
     return subscription;
   }
@@ -130,6 +150,15 @@ export class StripeService {
     priceId: string,
   ) {
     const customerId = await this.createCostumers(id);
+    const existSubscriptions = await this.prisma.subscriptions.findFirst({
+      where: {
+        userId: id,
+      },
+    });
+    if (!existSubscriptions) {
+      await this.createSubscription(id, priceId);
+    }
+
     const session = await this.stripe.checkout.sessions.create({
       customer: customerId,
       payment_method_types: ['card'],
@@ -141,5 +170,133 @@ export class StripeService {
     return {
       url: session.url,
     };
+  }
+  constructWebhookEvent(
+    body: Buffer,
+    sig: string,
+    secret: string,
+  ): Stripe.Event {
+    return this.stripe.webhooks.constructEvent(body, sig, secret);
+  }
+  async handleWebhook(event: Stripe.Event) {
+    switch (event.type) {
+      case 'invoice.payment_succeeded': {
+        const invoice = event.data.object as Stripe.Invoice;
+        const customerId = invoice.customer as string;
+        console.log('customerId', customerId);
+
+        const user = await this.prisma.user.findFirst({
+          where: {
+            costumerId: customerId,
+          },
+        });
+        console.log(user.id);
+        if (!user) {
+          throw new BadRequestException(
+            `Usuário com costumerId ${customerId} não encontrado`,
+          );
+        }
+        const subscription = await this.prisma.subscriptions.update({
+          where: {
+            userId: user.id,
+          },
+          data: {
+            hasActiveSubscription: true,
+          },
+        });
+        console.log('subscription', subscription);
+
+        console.log(`Pagamento confirmado para o cliente ${customerId}`);
+        break;
+      }
+
+      case 'invoice.payment_failed': {
+        const invoice = event.data.object as Stripe.Invoice;
+        const customerId = invoice.customer as string;
+
+        const user = await this.prisma.user.findFirst({
+          where: {
+            costumerId: customerId,
+          },
+        });
+        await this.prisma.subscriptions.update({
+          where: {
+            userId: user.id,
+          },
+          data: {
+            hasActiveSubscription: false,
+          },
+        });
+
+        console.log(`Pagamento falhou para o cliente ${customerId}`);
+        break;
+      }
+
+      case 'customer.subscription.deleted': {
+        const subscription = event.data.object as Stripe.Subscription;
+        const customerId = subscription.customer as string;
+
+        const user = await this.prisma.user.findFirst({
+          where: {
+            costumerId: customerId,
+          },
+        });
+        await this.prisma.subscriptions.update({
+          where: {
+            userId: user.id,
+          },
+          data: {
+            hasActiveSubscription: false,
+          },
+        });
+
+        console.log(`Assinatura cancelada para o cliente ${customerId}`);
+        break;
+      }
+      case 'customer.subscription.updated': {
+        const subscription = event.data.object as Stripe.Subscription;
+        const customerId = subscription.customer as string;
+        const newPriceId = subscription.items.data[0]?.price.id;
+
+        const user = await this.prisma.user.findFirst({
+          where: {
+            costumerId: customerId,
+          },
+        });
+        const existSubscriptions = await this.prisma.subscriptions.findFirst({
+          where: {
+            userId: user.id,
+          },
+        });
+        if (existSubscriptions) {
+          await this.prisma.subscriptions.update({
+            where: {
+              userId: user.id,
+            },
+            data: {
+              hasActiveSubscription: subscription.status === 'active',
+              pricesId: newPriceId,
+            },
+          });
+          console.log(
+            `Assinatura ${subscription.id} atualizada com novo plano.`,
+          );
+        } else {
+          await this.prisma.subscriptions.create({
+            data: {
+              subscriptionId: subscription.id,
+              userId: user.id,
+              pricesId: newPriceId,
+              hasActiveSubscription: subscription.status === 'active',
+            },
+          });
+        }
+
+        break;
+      }
+
+      default:
+        console.log(`Evento não tratado: ${event.type}`);
+    }
   }
 }

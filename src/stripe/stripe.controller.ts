@@ -1,23 +1,28 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
   Post,
+  RawBodyRequest,
   Req,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import { StripeService } from './stripe.service';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from 'src/auth/auth.guard';
 import { RolesGuard } from 'src/auth/role.guard';
-import { Roles } from 'src/auth/roles.decorator';
+import { Roles, SubscriptionProducts } from 'src/auth/roles.decorator';
 import { UserType } from 'src/auth/user-type.enum';
 import {
   CreateCheckoutSession,
   createProductsController,
   createSubscription,
 } from './dtos/stripe.dto';
+import { Request, Response } from 'express';
+import Stripe from 'stripe';
 
 @ApiTags('stripe')
 @Controller('stripe')
@@ -83,5 +88,48 @@ export class StripeController {
       data.priceId,
     );
     return checkout.url;
+  }
+  @HttpCode(HttpStatus.CREATED)
+  @Post('webhook')
+  async handleWebhook(
+    @Req() req: RawBodyRequest<Request>,
+    @Res() res: Response,
+  ) {
+    const sigHeader = req.headers['stripe-signature'];
+    if (Array.isArray(sigHeader)) {
+      return res.status(400).json({ error: 'Invalid Stripe signature format' });
+    }
+    const sig = sigHeader as string;
+
+    const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    if (!sig || !endpointSecret) {
+      return res
+        .status(400)
+        .json({ error: 'Missing Stripe signature or endpoint secret' });
+    }
+    let event: Stripe.Event;
+    try {
+      const rawBody = req.rawBody;
+
+      event = this.stripeService.constructWebhookEvent(
+        rawBody,
+        sig,
+        endpointSecret,
+      );
+    } catch (err) {
+      console.error('Erro ao validar webhook Stripe:', err.message);
+      return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+    await this.stripeService.handleWebhook(event);
+    res.status(200).json({ received: true });
+  }
+  @HttpCode(HttpStatus.CREATED)
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard, RolesGuard, SubscriptionProducts)
+  @Roles(UserType.Admin, UserType.User)
+  @SubscriptionProducts('al2')
+  @Get('test')
+  async test(@Res() res: Response) {
+    return res.send('hello world');
   }
 }

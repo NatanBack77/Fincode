@@ -10,6 +10,7 @@ import { RedisModule } from './redis/redis.module';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { StripeController } from './stripe/stripe.controller';
 import { StripeModule } from './stripe/stripe.module';
+import { Reflector } from '@nestjs/core';
 
 @Module({
   imports: [
@@ -22,6 +23,6 @@ import { StripeModule } from './stripe/stripe.module';
     StripeModule.forRootAsync(),
   ],
   controllers: [AppController, RedisController, StripeController],
-  providers: [AppService],
+  providers: [AppService, Reflector],
 })
 export class AppModule {}

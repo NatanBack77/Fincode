@@ -5,7 +5,7 @@ import { StripeService } from './stripe.service';
 import { PrismaModule } from 'src/prisma/prisma.module';
 import { RedisModule } from 'src/redis/redis.module';
 import { UserModule } from 'src/user/user.module';
-
+import { PrismaService } from 'src/prisma/prisma.service';
 @Module({})
 // biome-ignore lint/complexity/noStaticOnlyClass: <explanation>
 export class StripeModule {
@@ -15,6 +15,7 @@ export class StripeModule {
       imports: [ConfigModule.forRoot(), PrismaModule, RedisModule, UserModule],
       controllers: [StripeController],
       providers: [
+        PrismaService,
         StripeService,
         {
           provide: 'STRIPE_API_KEY',
