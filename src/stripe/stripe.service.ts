@@ -77,6 +77,31 @@ export class StripeService {
       );
     }
   }
+  async hasActiveSubscriptionWithSamePlan(customerId: string, priceId: string) {
+    try {
+      const subscriptions = await this.stripe.subscriptions.list({
+        customer: customerId,
+        status: 'active',
+        limit: 100,
+      });
+
+      const hasActivePlan = subscriptions.data.some((subscription) => {
+        return subscription.items.data.some(
+          (item) => item.price.id === priceId,
+        );
+      });
+
+      return hasActivePlan;
+    } catch (error) {
+      this.logger.error(
+        'Erro ao verificar assinatura ativa com o mesmo plano',
+        error,
+      );
+      throw new BadRequestException(
+        'Erro ao verificar assinatura ativa com o mesmo plano',
+      );
+    }
+  }
 
   async addPaymentMethodToCustomer(
     customerId: string,
@@ -210,6 +235,15 @@ export class StripeService {
     });
     if (!pricesId) {
       throw new BadRequestException('Produto não existe');
+    }
+    const validateExistsPlan = await this.hasActiveSubscriptionWithSamePlan(
+      customerId,
+      pricesId.priceId,
+    );
+    if (validateExistsPlan) {
+      throw new BadRequestException(
+        'Você já possui uma assinatura ativa com este plano',
+      );
     }
 
     if (existingSubscription) {
