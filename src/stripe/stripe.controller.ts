@@ -1,10 +1,13 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
+  HttpException,
   HttpStatus,
   Post,
+  Query,
   RawBodyRequest,
   Req,
   Res,
@@ -18,16 +21,54 @@ import { Roles, SubscriptionProducts } from 'src/auth/roles.decorator';
 import { UserType } from 'src/auth/user-type.enum';
 import {
   CreateCheckoutSession,
+  createCustomer,
+  createPaymentMethod,
+  // createPaymentMethod,
   createProductsController,
   createSubscription,
+  UpdateSubscription,
+  UpdateSubscriptionQuery,
 } from './dtos/stripe.dto';
 import { Request, Response } from 'express';
 import Stripe from 'stripe';
+import { SubscriptionGuard } from 'src/auth/subscription.guard';
 
 @ApiTags('stripe')
 @Controller('stripe')
 export class StripeController {
   constructor(private readonly stripeService: StripeService) {}
+
+  @HttpCode(HttpStatus.CREATED)
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard, RolesGuard)
+  @Roles(UserType.Admin, UserType.User)
+  @Get('me')
+  async getMySubscription(@Req() req) {
+    const userId = req.user.sub;
+    console.log(userId);
+    const subscription = await this.stripeService.getUserSubscription(userId);
+    return subscription;
+  }
+
+  @HttpCode(HttpStatus.CREATED)
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard, RolesGuard)
+  @Roles(UserType.Admin, UserType.User)
+  @Post('payment')
+  async createPaymentMethod(@Body() data: createPaymentMethod) {
+    return await this.stripeService.crateTokenPayment(data);
+  }
+
+  @HttpCode(HttpStatus.CREATED)
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard, RolesGuard)
+  @Roles(UserType.Admin, UserType.User)
+  @Get('products')
+  async getAllProducts() {
+    const products = await this.stripeService.getAllProduct();
+    console.log(JSON.stringify(products, null, 4));
+    return products;
+  }
   @HttpCode(HttpStatus.CREATED)
   @ApiBearerAuth()
   @UseGuards(AuthGuard, RolesGuard)
@@ -44,22 +85,29 @@ export class StripeController {
       interval: data.interval,
     };
     const productId = await this.stripeService.createProduct(product);
-    await this.stripeService.CreatePrice(
+    await this.stripeService.createPrice(
+      Price,
       productId.dbProductId,
       productId.stripeProductId,
-      Price,
     );
   }
+  // @HttpCode(HttpStatus.CREATED)
+  // @ApiBearerAuth()
+  // @UseGuards(AuthGuard, RolesGuard)
+  // @Roles(UserType.Admin, UserType.User)
+  // @Post('create-paymentMethod')
+  // async createPaymentMethod(@Body() data: createPaymentMethod) {
+  //   await this.stripeService.createPaymentMethod(data);
+  // }
 
   @HttpCode(HttpStatus.CREATED)
   @ApiBearerAuth()
   @UseGuards(AuthGuard, RolesGuard)
   @Roles(UserType.Admin, UserType.User)
   @Post('create-customer')
-  async createCustomer(@Req() req) {
+  async createCustomer(@Req() req, @Body() data: createCustomer) {
     const userId = req.user.sub;
-    console.log('User', userId);
-    await this.stripeService.createCostumers(userId);
+    await this.stripeService.createCustomer(userId, data.paymentMethodId);
   }
 
   @HttpCode(HttpStatus.CREATED)
@@ -69,26 +117,59 @@ export class StripeController {
   @Post('create-subscription')
   async createSubscription(@Req() req, @Body() data: createSubscription) {
     const userId = req.user.sub;
-    console.log('user', userId);
 
-    await this.stripeService.createSubscription(userId, data.priceId);
+    await this.stripeService.createSubscription(
+      userId,
+      data.paymentMethodId,
+      data.productId,
+    );
   }
+
+  // @HttpCode(HttpStatus.CREATED)
+  // @ApiBearerAuth()
+  // @UseGuards(AuthGuard, RolesGuard)
+  // @Roles(UserType.Admin, UserType.User)
+  // @Post('create-checkout-session')
+  // async createCheckoutSession(@Req() req, @Body() data: CreateCheckoutSession) {
+  //   const userId = req.user.sub;
+
+  //   const checkout = await this.stripeService.createCheckoutSession(
+  //     userId,
+  //     data.successUrl,
+  //     data.cancelUrl,
+  //     data.priceId,
+  //     data.token,
+  //   );
+  //   return checkout.url;
+  // }
   @HttpCode(HttpStatus.CREATED)
   @ApiBearerAuth()
   @UseGuards(AuthGuard, RolesGuard)
   @Roles(UserType.Admin, UserType.User)
-  @Post('create-checkout-session')
-  async createCheckoutSession(@Req() req, @Body() data: CreateCheckoutSession) {
+  @Post('update-subscription')
+  async updateSubscription(
+    @Req() req,
+    @Query() query: UpdateSubscriptionQuery,
+    @Body() updateSubscriptionDto: UpdateSubscription,
+  ) {
     const userId = req.user.sub;
-
-    const checkout = await this.stripeService.createCheckoutSession(
+    return await this.stripeService.updateSubscription(
       userId,
-      data.successUrl,
-      data.cancelUrl,
-      data.priceId,
+      query.priceId,
+      updateSubscriptionDto.paymentMethodId,
     );
-    return checkout.url;
   }
+
+  @HttpCode(HttpStatus.CREATED)
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard, RolesGuard)
+  @Roles(UserType.Admin, UserType.User)
+  @Delete('delete-subscription')
+  async deleteSubscription(@Req() req) {
+    const userId = req.user.sub;
+    await this.stripeService.deleteSubscription(userId);
+  }
+
   @HttpCode(HttpStatus.CREATED)
   @Post('webhook')
   async handleWebhook(
@@ -125,7 +206,7 @@ export class StripeController {
   }
   @HttpCode(HttpStatus.CREATED)
   @ApiBearerAuth()
-  @UseGuards(AuthGuard, RolesGuard, SubscriptionProducts)
+  @UseGuards(AuthGuard, RolesGuard, SubscriptionGuard)
   @Roles(UserType.Admin, UserType.User)
   @SubscriptionProducts('al2')
   @Get('test')

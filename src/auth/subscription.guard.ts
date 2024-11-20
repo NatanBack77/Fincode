@@ -16,44 +16,59 @@ export class SubscriptionGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
-    const userId = request.user?.id;
+    const userId = request.user.sub;
 
     if (!userId) {
-      return false;
+      throw new BadRequestException('Usuário não autenticado');
     }
 
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      include: {
-        Subscriptions: {
-          include: {
-            Price: {
-              include: {
-                Products: true,
-              },
+    const userSubscriptions = await this.getUserSubscriptions(userId);
+    if (!userSubscriptions.length) {
+      throw new BadRequestException('Usuário sem permissão');
+    }
+
+    const allowedProducts = this.getAllowedProductsForRoute(context);
+    const hasAccess = this.checkUserAccess(userSubscriptions, allowedProducts);
+
+    if (!hasAccess) {
+      throw new BadRequestException(
+        'Usuário sem permissão para acessar este recurso',
+      );
+    }
+
+    return hasAccess;
+  }
+
+  private async getUserSubscriptions(userId: string) {
+    return this.prisma.subscriptions.findMany({
+      where: {
+        userId,
+        hasActiveSubscription: true,
+      },
+      select: {
+        Price: {
+          select: {
+            Products: {
+              select: { name: true },
             },
           },
         },
       },
     });
-
-    if (!user || user.Subscriptions.length === 0) {
-      throw new BadRequestException('Usuário sem permissão');
-    }
-
-    const allowedProducts = this.getAllowedProductsForRoute(context);
-    const hasAccess = user.Subscriptions.some(
-      (sub) =>
-        sub.hasActiveSubscription === true &&
-        allowedProducts.includes(sub.Price.Products.name),
-    );
-
-    return hasAccess;
   }
 
   private getAllowedProductsForRoute(context: ExecutionContext): string[] {
     const handler = context.getHandler();
     const allowedProducts = this.reflector.get<string[]>('products', handler);
     return allowedProducts || [];
+  }
+
+  private checkUserAccess(
+    subscriptions: Array<{ Price: { Products: { name: string } } }>,
+    allowedProducts: string[],
+  ): boolean {
+    return subscriptions.some((sub) =>
+      allowedProducts.includes(sub.Price.Products.name),
+    );
   }
 }
