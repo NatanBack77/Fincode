@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -7,6 +8,7 @@ import {
   HttpException,
   HttpStatus,
   Post,
+  Put,
   Query,
   RawBodyRequest,
   Req,
@@ -26,6 +28,7 @@ import {
   // createPaymentMethod,
   createProductsController,
   createSubscription,
+  updatePaymentMethod,
   UpdateSubscription,
   UpdateSubscriptionQuery,
 } from './dtos/stripe.dto';
@@ -167,7 +170,23 @@ export class StripeController {
   @Delete('delete-subscription')
   async deleteSubscription(@Req() req) {
     const userId = req.user.sub;
-    await this.stripeService.deleteSubscription(userId);
+    await this.stripeService.cancelSubscription(userId);
+  }
+
+  @HttpCode(HttpStatus.CREATED)
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard, RolesGuard)
+  @Roles(UserType.Admin, UserType.User)
+  @Put('update-paymentMethod')
+  async updatePaymentMethod(@Req() req, @Body() data: updatePaymentMethod) {
+    const customer = await this.stripeService.getCustomerByUserId(req.user.sub);
+    if (!customer) {
+      throw new BadRequestException('User sem Custumer');
+    }
+    await this.stripeService.addPaymentMethodToCustomer(
+      customer.costumerId,
+      data.paymentMethodId,
+    );
   }
 
   @HttpCode(HttpStatus.CREATED)
@@ -208,7 +227,7 @@ export class StripeController {
   @ApiBearerAuth()
   @UseGuards(AuthGuard, RolesGuard, SubscriptionGuard)
   @Roles(UserType.Admin, UserType.User)
-  @SubscriptionProducts('al2')
+  @SubscriptionProducts('Produto3')
   @Get('test')
   async test(@Res() res: Response) {
     return res.send('hello world');

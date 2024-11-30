@@ -1,12 +1,13 @@
 import {
   BadRequestException,
+  ConsoleLogger,
   Inject,
   Injectable,
   Logger,
 } from '@nestjs/common';
 import Stripe from 'stripe';
 import { CreatePrice, createProducts } from './dtos/stripe.dto';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, SubscriptionStatus } from '@prisma/client';
 
 @Injectable()
 export class StripeService {
@@ -25,6 +26,17 @@ export class StripeService {
   async getAllProduct() {
     return this.prisma.products.findMany({
       include: { Prices: true },
+    });
+  }
+
+  async getCustomerByUserId(userId: string) {
+    return await this.prisma.user.findFirst({
+      where: {
+        id: userId,
+      },
+      select: {
+        costumerId: true,
+      },
     });
   }
 
@@ -55,6 +67,7 @@ export class StripeService {
         cvc: cardDetails.cvc,
       },
     });
+    console.log('token', token);
     return token;
   }
   async createPaymentMethod(cardDetails: {
@@ -108,11 +121,33 @@ export class StripeService {
     paymentMethodId: string,
   ) {
     try {
-      await this.stripe.paymentMethods.attach(paymentMethodId, {
+      const paymentMethod =
+        await this.stripe.paymentMethods.retrieve(paymentMethodId);
+      if (!paymentMethod) {
+        throw new BadRequestException('Método de Pagamento não encontrado');
+      }
+      const validateExistsUserWithPaymentMethod =
+        await this.stripe.paymentMethods.list({
+          customer: customerId,
+          type: 'card',
+        });
+
+      const isAlreadyAttached = validateExistsUserWithPaymentMethod.data.some(
+        (pm) => {
+          pm.id === paymentMethodId;
+        },
+      );
+      if (isAlreadyAttached) {
+        throw new BadRequestException(
+          'Método de Pagamento já associado ao usuário',
+        );
+      }
+      const test = await this.stripe.paymentMethods.attach(paymentMethodId, {
         customer: customerId,
       });
+
       await this.stripe.customers.update(customerId, {
-        invoice_settings: { default_payment_method: paymentMethodId },
+        invoice_settings: { default_payment_method: test.id },
       });
     } catch (error) {
       this.logger.error(
@@ -208,9 +243,7 @@ export class StripeService {
         email: user.email,
       });
       const customer = await this.stripe.customers.create({
-        payment_method: payment_method,
         email: user.email,
-        invoice_settings: { default_payment_method: payment_method },
       });
 
       return customer.id;
@@ -218,60 +251,116 @@ export class StripeService {
       throw new Error(`Stripe error: ${error.message}`);
     }
   }
+  async renewSubscription(userId: string, subscriptionId: string) {
+    const subscription = await this.prisma.subscriptions.findFirst({
+      where: { id: subscriptionId, userId },
+    });
+
+    if (!subscription) {
+      throw new BadRequestException('Assinatura não encontrada.');
+    }
+
+    const updatedSubscription = await this.stripe.subscriptions.update(
+      subscription.subscriptionId,
+      { cancel_at_period_end: false, proration_behavior: 'create_prorations' },
+    );
+
+    await this.prisma.subscriptions.update({
+      where: { id: subscriptionId },
+      data: { hasActiveSubscription: 'ACTIVE', subscriptionEnd: null },
+    });
+
+    this.logger.log('assinatura renovada');
+
+    return updatedSubscription;
+  }
 
   async createSubscription(
     userId: string,
     payment_method: string,
     productId: string,
   ) {
-    const customerId = await this.createCustomer(userId, payment_method);
-
-    const existingSubscription = await this.prisma.subscriptions.findFirst({
-      where: { userId },
-    });
-
-    const pricesId = await this.prisma.prices.findFirst({
+    const price = await this.prisma.prices.findFirst({
       where: { product_id: productId },
     });
-    if (!pricesId) {
+    if (!price) {
       throw new BadRequestException('Produto não existe');
     }
-    const validateExistsPlan = await this.hasActiveSubscriptionWithSamePlan(
-      customerId,
-      pricesId.priceId,
-    );
-    if (validateExistsPlan) {
-      throw new BadRequestException(
-        'Você já possui uma assinatura ativa com este plano',
-      );
+
+    const user = await this.prisma.user.findFirst({ where: { id: userId } });
+    if (!user) {
+      throw new BadRequestException('Usuário não encontrado');
     }
 
+    const customerId =
+      user.costumerId || (await this.createCustomer(userId, payment_method));
+
+    const stripeSubscriptions = await this.stripe.subscriptions.list({
+      customer: customerId,
+    });
+
+    const activeSubscription = stripeSubscriptions.data.find(
+      (sub) => sub.status === 'active',
+    );
+
+    const existingSubscription = await this.prisma.subscriptions.findFirst({
+      where: {
+        userId,
+        hasActiveSubscription: {
+          in: ['ACTIVE', 'ACTIVE_UNTIL_END', 'CANCELlED'],
+        },
+      },
+      include: {
+        Price: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const validator = existingSubscription
+      ? existingSubscription.pricesId === price.id
+      : false;
+
     if (existingSubscription) {
-      const existingSubscriptionInStripe =
-        await this.stripe.subscriptions.retrieve(
-          existingSubscription.subscriptionId,
-        );
-      if (existingSubscriptionInStripe) {
-        const subscription = await this.updateSubscription(
+      if (existingSubscription.hasActiveSubscription === 'ACTIVE') {
+        if (validator) {
+          throw new BadRequestException(
+            'Você já possui uma assinatura ativa com este plano.',
+          );
+        }
+
+        console.log('Atualizando plano...');
+        const updatedSubscription = await this.updateSubscription(
           userId,
           productId,
           payment_method,
         );
-        return subscription;
+        return updatedSubscription;
+      }
+
+      if (
+        ['CANCELLED', 'ACTIVE_UNTIL_END'].includes(
+          existingSubscription.hasActiveSubscription,
+        )
+      ) {
+        if (validator) {
+          console.log('Renovando assinatura existente...');
+          return this.renewSubscription(userId, existingSubscription.id);
+        }
+        console.log('Cancelando assinatura anterior e criando nova...');
+        await this.stripe.subscriptions.cancel(
+          existingSubscription.subscriptionId,
+        );
       }
     }
+
+    console.log('Criando nova assinatura...');
     await this.addPaymentMethodToCustomer(customerId, payment_method);
 
     const subscription = await this.stripe.subscriptions.create({
       customer: customerId,
       cancel_at_period_end: false,
-      items: [{ price: pricesId.priceId }],
+      items: [{ price: price.priceId }],
       expand: ['latest_invoice.payment_intent'],
-    });
-
-    console.log('subscription', subscription);
-    const price = await this.prisma.prices.findFirst({
-      where: { product_id: productId },
     });
 
     await this.prisma.subscriptions.create({
@@ -279,11 +368,10 @@ export class StripeService {
         subscriptionId: subscription.id,
         userId,
         pricesId: price.id,
-        hasActiveSubscription: true,
+        hasActiveSubscription: 'ACTIVE',
       },
     });
 
-    console.log('subscription', subscription);
     return subscription.id;
   }
 
@@ -292,20 +380,47 @@ export class StripeService {
     productId: string,
     payment_method: string,
   ) {
-    const user = await this.prisma.user.findUnique({
+    const user = await this.prisma.user.findFirst({
       where: { id: userId },
-      include: { Subscriptions: true },
+      include: {
+        Subscriptions: {
+          where: {
+            hasActiveSubscription: 'ACTIVE',
+          },
+        },
+      },
     });
+    console.log('user', user);
 
     if (!user) {
       throw new BadRequestException('Usuário não encontrado');
     }
+    if (!user.Subscriptions) {
+      throw new BadRequestException('Usuário sem assinatura');
+    }
+
     const pricesId = await this.prisma.prices.findFirst({
       where: { product_id: productId },
     });
 
     if (!pricesId) {
       throw new BadRequestException('Produto não existe');
+    }
+    const validatePriceId = user.Subscriptions.some((sub) => {
+      return sub.pricesId === pricesId.id;
+    });
+    console.log('validatePriceId', validatePriceId);
+    if (validatePriceId) {
+      throw new BadRequestException('User já tem assinatura');
+    }
+
+    const payment = await this.prisma.paymentMentMethod.findFirst({
+      where: {
+        userId,
+      },
+    });
+    if (!payment) {
+      throw new BadRequestException('Usuário sem meio de pagamento');
     }
 
     const subscriptionId = user.Subscriptions[0].subscriptionId;
@@ -325,6 +440,7 @@ export class StripeService {
               price: pricesId.priceId,
             },
           ],
+          proration_behavior: 'create_prorations',
         },
       );
 
@@ -333,14 +449,39 @@ export class StripeService {
     await this.createSubscription(userId, payment_method, productId);
   }
 
-  async deleteSubscription(userId: string) {
+  async cancelSubscription(userId: string) {
+    const user = await this.prisma.user.findFirst({
+      where: {
+        id: userId,
+      },
+    });
+    if (!user || !user.costumerId) {
+      throw new BadRequestException('User não encontrado');
+    }
+
+    const subscriptionStripe = await this.stripe.subscriptions.list({
+      customer: user.costumerId,
+    });
+    const activeSubscription = subscriptionStripe.data.find(
+      (sub) => sub.status === 'active',
+    );
+    if (!activeSubscription) {
+      throw new BadRequestException(
+        'Nenhuma assinatura ativa encontrada para este usuário.',
+      );
+    }
+
     const subscription = await this.prisma.subscriptions.findFirst({
       where: {
         userId,
+        subscriptionId: activeSubscription.id,
       },
     });
-    await this.stripe.subscriptions.cancel(subscription.subscriptionId);
+    await this.stripe.subscriptions.update(subscription.subscriptionId, {
+      cancel_at_period_end: true,
+    });
   }
+
   async createCheckoutSession(
     userId: string,
     successUrl: string,
@@ -348,7 +489,7 @@ export class StripeService {
     priceId = 'price_1QK2hx06nRmRVtvs7wEIU6UV',
     token: string,
   ) {
-    const user = await this.prisma.user.findUnique({
+    const user = await this.prisma.user.findFirst({
       where: { id: userId },
       select: { costumerId: true, email: true, name: true },
     });
@@ -421,6 +562,17 @@ export class StripeService {
           event.data.object as Stripe.Subscription,
         );
         break;
+      case 'customer.subscription.created':
+        await this.handleSubscriptionCreated(
+          event.data.object as Stripe.Subscription,
+        );
+        break;
+
+      case 'payment_method.attached':
+        await this.handlePaymentMethodAttached(
+          event.data.object as Stripe.PaymentMethod,
+        );
+        break;
 
       case 'customer.subscription.updated':
         await this.handleSubscriptionUpdated(
@@ -435,6 +587,7 @@ export class StripeService {
 
   private async handlePaymentSucceeded(invoice: Stripe.Invoice) {
     const customerId = invoice.customer as string;
+    const subscriptionId = invoice.subscription as string;
 
     const user = await this.prisma.user.findFirst({
       where: { costumerId: customerId },
@@ -445,9 +598,14 @@ export class StripeService {
       return;
     }
 
-    await this.prisma.subscriptions.updateMany({
-      where: { userId: user.id },
-      data: { hasActiveSubscription: true },
+    await this.prisma.subscriptions.update({
+      where: {
+        userId_subscriptionId: {
+          userId: user.id,
+          subscriptionId: subscriptionId,
+        },
+      },
+      data: { hasActiveSubscription: 'ACTIVE' },
     });
 
     this.logger.log(`Pagamento confirmado para o cliente ${customerId}`);
@@ -463,7 +621,7 @@ export class StripeService {
     if (user) {
       await this.prisma.subscriptions.updateMany({
         where: { userId: user.id },
-        data: { hasActiveSubscription: false },
+        data: { hasActiveSubscription: 'INCOMPLETE' },
       });
       this.logger.warn(`Pagamento falhou para o cliente ${customerId}`);
     }
@@ -471,6 +629,7 @@ export class StripeService {
 
   private async handleSubscriptionDeleted(subscription: Stripe.Subscription) {
     const customerId = subscription.customer as string;
+    const subscriptionId = subscription.id;
 
     const user = await this.prisma.user.findFirst({
       where: { costumerId: customerId },
@@ -478,10 +637,34 @@ export class StripeService {
 
     if (user) {
       await this.prisma.subscriptions.delete({
-        where: { userId: user.id },
+        where: {
+          userId_subscriptionId: {
+            userId: user.id,
+            subscriptionId: subscriptionId,
+          },
+        },
       });
       this.logger.warn(`Assinatura cancelada para o cliente ${customerId}`);
     }
+  }
+  private async handleSubscriptionCreated(subscription: Stripe.Subscription) {
+    const customerId = subscription.customer as string;
+    const subscriptionId = subscription.id;
+
+    const user = await this.prisma.user.findFirst({
+      where: { costumerId: customerId },
+    });
+    await this.prisma.subscriptions.update({
+      where: {
+        userId_subscriptionId: {
+          userId: user.id,
+          subscriptionId: subscriptionId,
+        },
+      },
+      data: {
+        hasActiveSubscription: 'ACTIVE',
+      },
+    });
   }
 
   private async handleCustomerCreated(customer: Stripe.Customer) {
@@ -499,35 +682,77 @@ export class StripeService {
       data: { costumerId: customerId },
     });
   }
+  private async handlePaymentMethodAttached(
+    paymentMethod: Stripe.PaymentMethod,
+  ) {
+    const customerId = paymentMethod.customer as string;
+    const PaymentMethodId = paymentMethod.id;
+
+    const user = await this.prisma.user.findFirst({
+      where: {
+        costumerId: customerId,
+      },
+    });
+    await this.prisma.paymentMentMethod.create({
+      data: {
+        userId: user.id,
+        paymentMethodId: PaymentMethodId,
+      },
+    });
+  }
 
   private async handleSubscriptionUpdated(subscription: Stripe.Subscription) {
     const customerId = subscription.customer as string;
+    const periodEnd = subscription.current_period_end;
     const PriceId = subscription.items.data[0]?.price.id;
+    const subscriptionId = subscription.id;
 
     const user = await this.prisma.user.findFirst({
       where: { costumerId: customerId },
-    });
-    const newPriceId = await this.prisma.prices.findFirst({
-      where: {
-        priceId: PriceId,
-      },
     });
 
     if (!user) {
       this.logger.warn(`Usuário não encontrado para o cliente ${customerId}`);
       return;
     }
-
     const subscriptionRecord = await this.prisma.subscriptions.findFirst({
-      where: { userId: user.id },
+      where: { userId: user.id, subscriptionId: subscriptionId },
     });
 
-    if (subscriptionRecord) {
+    if (!subscriptionRecord) {
+      this.logger.warn(`Assinatura não encontrada para o usuário ${user.id}`);
+      return;
+    }
+
+    if (subscription.cancel_at_period_end) {
+      const accessExpirationDate = new Date(periodEnd * 1000);
+
+      return await this.prisma.subscriptions.update({
+        where: { id: subscriptionRecord.id },
+        data: {
+          hasActiveSubscription: 'ACTIVE_UNTIL_END',
+          subscriptionEnd: accessExpirationDate,
+        },
+      });
+    }
+
+    const newPrice = await this.prisma.prices.findFirst({
+      where: {
+        priceId: PriceId,
+      },
+    });
+
+    if (newPrice) {
       await this.prisma.subscriptions.update({
         where: { id: subscriptionRecord.id },
-        data: { pricesId: newPriceId.id },
+        data: {
+          pricesId: newPrice.id,
+          hasActiveSubscription: 'ACTIVE',
+          subscriptionEnd: null,
+        },
       });
-      this.logger.log(`Assinatura atualizada para o cliente ${customerId}`);
     }
+
+    this.logger.log(`Assinatura atualizada para o cliente ${customerId}`);
   }
 }

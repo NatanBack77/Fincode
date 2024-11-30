@@ -108,10 +108,18 @@ export class createCustomer {
   paymentMethodId: string;
 }
 
+export class updatePaymentMethod {
+  @ApiProperty()
+  @IsNotEmpty()
+  @IsString()
+  paymentMethodId: string;
+}
+
 export class CreateCheckoutSession {
   @ApiProperty()
   @IsNotEmpty()
   @IsString()
+  @IsUUID()
   priceId: string;
 
   @ApiProperty()

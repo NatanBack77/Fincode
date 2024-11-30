@@ -2,10 +2,12 @@ import {
   BadRequestException,
   CanActivate,
   ExecutionContext,
+  ForbiddenException,
   Injectable,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { PrismaService } from '../prisma/prisma.service';
+import { SUBSCRIPTION_PRODUCTS_KEY } from './roles.decorator';
 
 @Injectable()
 export class SubscriptionGuard implements CanActivate {
@@ -16,59 +18,54 @@ export class SubscriptionGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
-    const userId = request.user.sub;
+    const userId = request?.user?.sub;
 
     if (!userId) {
-      throw new BadRequestException('Usuário não autenticado');
+      throw new BadRequestException('Usuário não autenticado.');
     }
 
-    const userSubscriptions = await this.getUserSubscriptions(userId);
-    if (!userSubscriptions.length) {
-      throw new BadRequestException('Usuário sem permissão');
+    const requiredProducts = this.reflector.get<string[]>(
+      SUBSCRIPTION_PRODUCTS_KEY,
+      context.getHandler(),
+    );
+
+    if (!requiredProducts || requiredProducts.length === 0) {
+      throw new ForbiddenException('Nenhum produto associado a este recurso.');
     }
 
-    const allowedProducts = this.getAllowedProductsForRoute(context);
-    const hasAccess = this.checkUserAccess(userSubscriptions, allowedProducts);
-
-    if (!hasAccess) {
-      throw new BadRequestException(
-        'Usuário sem permissão para acessar este recurso',
-      );
-    }
-
-    return hasAccess;
-  }
-
-  private async getUserSubscriptions(userId: string) {
-    return this.prisma.subscriptions.findMany({
-      where: {
-        userId,
-        hasActiveSubscription: true,
-      },
-      select: {
-        Price: {
-          select: {
-            Products: {
-              select: { name: true },
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        Subscriptions: {
+          include: {
+            Price: {
+              include: {
+                Products: true,
+              },
             },
           },
         },
       },
     });
-  }
 
-  private getAllowedProductsForRoute(context: ExecutionContext): string[] {
-    const handler = context.getHandler();
-    const allowedProducts = this.reflector.get<string[]>('products', handler);
-    return allowedProducts || [];
-  }
+    if (!user) {
+      throw new BadRequestException('Usuário não encontrado.');
+    }
 
-  private checkUserAccess(
-    subscriptions: Array<{ Price: { Products: { name: string } } }>,
-    allowedProducts: string[],
-  ): boolean {
-    return subscriptions.some((sub) =>
-      allowedProducts.includes(sub.Price.Products.name),
-    );
+    const hasAccess = user.Subscriptions.some((sub) => {
+      const isProductValid =
+        sub.Price.Products &&
+        requiredProducts.includes(sub.Price.Products.name);
+      const isSubscriptionValid =
+        sub.subscriptionEnd === null || new Date() <= sub.subscriptionEnd;
+
+      return isProductValid && isSubscriptionValid;
+    });
+
+    if (!hasAccess) {
+      throw new BadRequestException('Usuário não possui acesso a esse recurso');
+    }
+
+    return true;
   }
 }
