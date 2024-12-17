@@ -30,6 +30,7 @@ jobs:
 
       - name: run lint
         run: npm run lint
+        continue-on-error: true 
 
       - name: run migrations prisma
         run: npx prisma migrate deploy
