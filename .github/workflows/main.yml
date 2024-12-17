@@ -32,9 +32,6 @@ jobs:
         run: npm run lint
         continue-on-error: true 
 
-      - name: run migrations prisma
-        run: npx prisma migrate deploy
-
       - name: build project
         run: npm run build 
 
