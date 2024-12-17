@@ -1,0 +1,41 @@
+name: CI/CD 
+on: 
+  push: 
+    branches: 
+      - main
+  pull_request:
+     branches:
+       - main
+
+jobs:
+   CI:
+     name: build, lint and test
+     runs-on: ubuntu-latest
+
+     strategy: 
+        matrix:
+          noode_version: [18,20]
+
+     steps: 
+      - name: checkout repository 
+        uses: actions/checkout@v4.2.2
+
+      - name : setup NodeJs
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node_version}}
+
+      - name: install dependencies
+        run: npm install
+
+      - name: run lint
+        run: npm run lint
+
+      - name: run migrations prisma
+        run: npx prisma migrate deploy
+
+      - name: build project
+        run: npm run build 
+
+      
+   
