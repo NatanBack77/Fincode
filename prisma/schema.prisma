@@ -14,17 +14,18 @@ datasource db {
 }
 
 model User {
-  id                   String          @id @default(uuid()) @db.Uuid
-  name                 String          @db.Text
-  email                String          @unique @db.Text
-  password             String          @db.Text
-  user_Role            UserType        @default(USER)
-  resetPasswordToken   String?         @db.Text
-  costumerId           String?         @db.Text
-  resetPasswordExpires DateTime?       @default(now()) @db.Timestamptz(3)
-  createdAt            DateTime?       @default(now()) @db.Timestamptz(3)
-  updatedAt            DateTime?       @default(now()) @db.Timestamptz(3)
+  id                   String              @id @default(uuid()) @db.Uuid
+  name                 String              @db.Text
+  email                String              @unique @db.Text
+  password             String              @db.Text
+  user_Role            UserType            @default(USER)
+  resetPasswordToken   String?             @db.Text
+  costumerId           String?             @unique @db.Text
+  resetPasswordExpires DateTime?           @default(now()) @db.Timestamptz(3)
+  createdAt            DateTime?           @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime?           @default(now()) @db.Timestamptz(3)
   Subscriptions        Subscriptions[]
+  PaymentMentMethod    PaymentMentMethod[]
 }
 
 model Products {
@@ -37,28 +38,49 @@ model Products {
 }
 
 model Prices {
-  id              String    @id @default(uuid()) @db.Uuid
-  currency        String    @default("BRL") @db.Text
-  unit_amout      Int       @db.Integer
-  product_id      String    @db.Uuid
-  stripeProductId String    @db.Text
-  recurring       String?   @db.Text
-  Products        Products  @relation(fields: [product_id], references: [id], onDelete: Cascade)
-  createdAt       DateTime? @default(now()) @db.Timestamptz(3)
-  updatedAt       DateTime? @default(now()) @db.Timestamptz(3)
+  id              String          @id @default(uuid()) @db.Uuid
+  currency        String          @default("BRL") @db.Text
+  priceId         String          @default("null") @db.Text
+  unit_amout      Int             @db.Integer
+  product_id      String          @db.Uuid
+  stripeProductId String          @db.Text
+  recurring       String?         @db.Text
+  Products        Products        @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  createdAt       DateTime?       @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime?       @default(now()) @db.Timestamptz(3)
+  Subscriptions   Subscriptions[]
 }
 
 model Subscriptions {
-  id                 String    @id @default(uuid()) @db.Uuid
-  subscriptionId     String    @db.Text
-  subscriptionStatus String    @db.Text
-  userId             String    @db.Uuid
-  User               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt          DateTime? @default(now()) @db.Timestamptz(3)
-  updatedAt          DateTime? @default(now()) @db.Timestamptz(3)
+  id                    String             @id @default(uuid()) @db.Uuid
+  subscriptionId        String             @db.Text
+  hasActiveSubscription SubscriptionStatus @default(INCOMPLETE)
+  userId                String             @db.Uuid
+  pricesId              String             @db.Uuid
+  subscriptionEnd       DateTime?          @db.Date
+  User                  User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  Price                 Prices             @relation(fields: [pricesId], references: [id], onDelete: Cascade)
+  createdAt             DateTime?          @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime?          @default(now()) @db.Timestamptz(3)
+
+  @@unique([userId, subscriptionId])
+}
+
+model PaymentMentMethod {
+  id              String @id @default(uuid()) @db.Uuid
+  userId          String @db.Uuid
+  User            User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  paymentMethodId String @db.Text
 }
 
 enum UserType {
   ADMIN
   USER
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  INCOMPLETE
+  CANCELlED
+  ACTIVE_UNTIL_END
 }
