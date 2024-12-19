@@ -50,3 +50,21 @@ jobs:
           tags: |
             natandevback707/stripe-api-nestjs:${{ github.run_number }}
             natandevback707/stripe-api-nestjs:latest
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: natandevback707/stripe-api-nestjs:${{ github.run_number }}
+          scan-type: image
+          format: 'json'
+          exit-code: '0'
+          output: 'resultado-scan.json'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+      
+      - name: Upload do resultado do Trivy
+        uses: actions/upload-artifact@v4
+        with: 
+          name: Trivy
+          path: resultado-scan.json
