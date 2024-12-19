@@ -63,5 +63,5 @@ jobs:
       - name: Upload do resultado do Trivy
         uses: actions/upload-artifact@v4
         with: 
-          name: Trivy
+          name: Trivy-${{ matrix.node_version }}
           path: resultado-scan.json
