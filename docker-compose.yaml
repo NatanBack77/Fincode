@@ -1,5 +1,19 @@
 version: '3'
 services:
+  app:
+    depends_on:
+      - redis
+      - postgres
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+      - "3001:3000"
+    volumes:
+      - .:/app:cached
+      - /app/node_modules
+
   redis:
     image: redis:latest
     container_name: redis_finconde
@@ -24,11 +38,10 @@ services:
       - POSTGRES_DB=fincode
     networks:
       - fincode
+
 networks:
   fincode:
     driver: bridge
+
 volumes:
   fincode:
-
-  
-   
