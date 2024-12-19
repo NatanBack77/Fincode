@@ -40,6 +40,18 @@ jobs:
         with: 
           Username: ${{secrets.Username}}
           Password: ${{secrets.Password}}
+
+      - name: Build e push
+        uses: docker/build-push-action@v6.10.0
+        with: 
+           push: true
+           context: .
+           file: DockerFile 
+           tags: |
+              natandevback/stripe-api-nestjs:${{ github.run_number }}
+              natandevback/stripe-api-nestjs:latest
+           
+       
           
         
         
