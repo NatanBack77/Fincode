@@ -37,7 +37,7 @@ jobs:
       - name: Scam credentials
         uses: gitleaks/gitleaks-action@v2
         with:
-         report-path: results-${{ github.run_id }}.sarif
+         report-path: results-${{ matrix.node_version }}.sarif
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
