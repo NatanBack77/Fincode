@@ -33,7 +33,7 @@ jobs:
         run: npm run build
 
       - name: Scam credentials
-      - uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
