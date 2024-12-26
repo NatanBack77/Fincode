@@ -32,6 +32,11 @@ jobs:
       - name: Build project
         run: npm run build
 
+      - name: Scam credentials
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Docker login
         uses: docker/login-action@v3
         with:
