@@ -36,6 +36,8 @@ jobs:
 
       - name: Scam credentials
         uses: gitleaks/gitleaks-action@v2
+        with:
+         report-path: results-${{ github.run_id }}.sarif
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -72,3 +74,4 @@ jobs:
         with: 
           name: Trivy-${{ matrix.node_version }}
           path: resultado-scan.json
+          
