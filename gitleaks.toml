@@ -1,0 +1,41 @@
+title = "Custom Gitleaks Config"
+description = "Custom rules to detect secrets and prevent conflicts"
+
+[[rules]]
+id = "generic-api-key"
+description = "Generic API Key"
+regex = '''(?i)(api_key|apikey|api[-_]?key)[=:](['"]?[a-z0-9]{20,50}['"]?)'''
+secret_group = 2
+entropy = 3.5
+path_exclude = ["node_modules", ".git", "dist", "build", "logs"]
+
+[[rules]]
+id = "generic-password"
+description = "Generic Password"
+regex = '''(?i)(password|pwd|pass|senha)[=:](['"]?[a-z0-9!@#$%^&*()_+={}:;<>?/.,]{8,50}['"]?)'''
+secret_group = 2
+path_exclude = ["node_modules", ".git", "dist", "build", "logs"]
+
+[[rules]]
+id = "generic-access-token"
+description = "Generic Access Token"
+regex = '''(?i)(token|bearer)[=:](['"]?[a-z0-9-_]{20,50}['"]?)'''
+secret_group = 2
+path_exclude = ["node_modules", ".git", "dist", "build", "logs"]
+
+# Excludes
+[[allowlist.files]]
+# Exclude any specific files from scans (add paths as needed)
+description = "Exclude specific files"
+regex = '''(example|sample|test).*\.env$'''
+
+[[allowlist.paths]]
+# Exclude directories from scans
+description = "Exclude common build directories"
+paths = ["node_modules", "dist", "build", ".git"]
+
+[[allowlist.patterns]]
+# Exclude patterns that may generate false positives
+description = "Exclude specific patterns"
+regex = '''dummy|sample|localhost|127\.0\.0\.1|example\.com'''
+
