@@ -9,6 +9,10 @@ jobs:
     name: Build, Lint, and Test
     runs-on: ubuntu-latest
 
+    strategy:
+      matrix:
+        node_version: [18.x, 20.x]
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4.2.2
@@ -18,7 +22,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20.x
+          node-version: ${{ matrix.node_version }}
 
       - name: Install dependencies
         run: npm install
@@ -33,6 +37,7 @@ jobs:
       - name: Scam credentials
         uses: gitleaks/gitleaks-action@v2
         with:
+         report-format: sarif
          report-path: results-${{ matrix.node_version }}.sarif
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
