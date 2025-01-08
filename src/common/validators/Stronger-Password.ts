@@ -24,9 +24,9 @@ export class StrongerPasswordConstraint
     return 'A senha é muito fraca! Deve conter letras maiúsculas e minúsculas, números e caracteres especiais.';
   }
 }
-
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function IsStrongerPassword(validationOptions?: ValidationOptions) {
-  return function (object: object, propertyName: string) {
+  return (object: object, propertyName: string) => {
     registerDecorator({
       target: object.constructor,
       propertyName: propertyName,
