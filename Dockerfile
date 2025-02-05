@@ -42,9 +42,6 @@ COPY package.json package-lock.json ./
 # Instale as dependências com npm
 RUN npm install --omit=dev
 
-# Rode as migrações do Prisma
-RUN npx prisma migrate deploy
-
 # Crie o usuário Natan e configure permissões
 RUN useradd -m Natan && chown -R Natan /app
 
