@@ -27,6 +27,8 @@ RUN npm prune --production
 # Use uma imagem Node.js menor para a execução
 FROM node:bullseye-slim 
 
+USER Natan
+
 # Crie o diretório de trabalho na imagem de execução
 WORKDIR /app
 
@@ -41,6 +43,8 @@ COPY package.json package-lock.json ./
 
 # Instale as dependências com npm
 RUN npm install --omit=dev
+
+RUN npx prisma migrate deploy
 
 # Exponha a porta do aplicativo (substitua pela porta real do seu aplicativo, se necessário)
 EXPOSE 3000
