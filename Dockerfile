@@ -27,10 +27,10 @@ RUN npm prune --production
 # Use uma imagem Node.js menor para a execução
 FROM node:bullseye-slim 
 
-USER Natan
-
 # Crie o diretório de trabalho na imagem de execução
 WORKDIR /app
+
+RUN apt-get update -y && apt-get install -y openssl
 
 # Copie os artefatos de construção da fase anterior
 COPY --from=build /app/prisma ./prisma
@@ -42,7 +42,14 @@ COPY package.json package-lock.json ./
 # Instale as dependências com npm
 RUN npm install --omit=dev
 
+# Rode as migrações do Prisma
 RUN npx prisma migrate deploy
+
+# Crie o usuário Natan e configure permissões
+RUN useradd -m Natan && chown -R Natan /app
+
+# Troque para o usuário Natan
+USER Natan
 
 # Exponha a porta do aplicativo (substitua pela porta real do seu aplicativo, se necessário)
 EXPOSE 3000
