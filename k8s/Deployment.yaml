@@ -1,0 +1,34 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: test
+  template:
+    metadata:
+      labels:
+        app: test
+    spec:
+      containers:
+        - image: natandevback707/stripe-api-nestjs:latest
+          name: stripe
+          ports:
+            - containerPort: 8000
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: name
+spec:
+  selector:
+    app: test
+  ports:
+    - port: 80
+      targetPort: 8080
+      nodePort: 30000
+      protocol: TCP
+  type: NodePort
