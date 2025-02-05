@@ -1,20 +1,20 @@
 version: '3'
 services:
-  app:
-    depends_on:
-      - redis
-      - postgres
-    build:
-      context: .
-      dockerfile: Dockerfile
-    restart: always
-    ports:
-      - "3000:3000"
-    networks:
-      - fincode
-    volumes:
-      - .:/app:cached
-      - /app/node_modules
+  # app:
+  #   depends_on:
+  #     - redis
+  #     - postgres
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   restart: always
+  #   ports:
+  #     - "3000:3000"
+  #   networks:
+  #     - fincode
+  #   volumes:
+  #     - .:/app:cached
+  #     - /app/node_modules
 
   redis:
     image: redis:latest
