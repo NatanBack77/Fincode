@@ -32,8 +32,6 @@ USER Natan
 # Crie o diretório de trabalho na imagem de execução
 WORKDIR /app
 
-RUN apt-get update -y && apt-get install -y openssl
-
 # Copie os artefatos de construção da fase anterior
 COPY --from=build /app/prisma ./prisma
 COPY --from=build /app/dist ./dist
