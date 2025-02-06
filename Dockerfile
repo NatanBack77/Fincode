@@ -1,55 +1,60 @@
-# Use uma imagem Node.js para construção
-FROM node:lts-bullseye AS build
+# Etapa de build
+FROM node:20-alpine AS build
 
-# Crie o diretório de trabalho na imagem
+# Diretório de trabalho
 WORKDIR /app
 
-# Copie os arquivos de configuração do projeto
+# Copia apenas arquivos essenciais para instalar as dependências
 COPY package.json package-lock.json tsconfig.build.json ./
 COPY prisma ./prisma/
+
+# Instala apenas as dependências necessárias para produção
+RUN npm ci --only=production
+
+# Copia o restante do código
 COPY . .
 
-# Instale as dependências com npm
-RUN npm install
-
-# Gere os arquivos do Prisma
+# Gera os arquivos do Prisma
 RUN npx prisma generate
 
-# Compile o código TypeScript
+# Compila o código TypeScript
 RUN npm run build
 
-# Remova dependências de desenvolvimento
+# Remover dependências de desenvolvimento
 RUN npm prune --production
 
-# Fase de construção concluída
-# Os artefatos de construção estão no diretório /app/dist
+# Etapa de execução
+FROM node:20-alpine AS runtime
 
-# Use uma imagem Node.js menor para a execução
-FROM node:bullseye-slim 
-
-# Crie o diretório de trabalho na imagem de execução
+# Diretório de trabalho
 WORKDIR /app
 
-RUN apt-get update -y && apt-get install -y openssl
+# Instala pacotes necessários (caso precise do OpenSSL)
+RUN apk add --no-cache openssl
 
-# Copie os artefatos de construção da fase anterior
+# Copia os arquivos da fase de build
 COPY --from=build /app/prisma ./prisma
 COPY --from=build /app/dist ./dist
+COPY --from=build /app/package.json /app/package-lock.json ./
 
-# Copie apenas os arquivos necessários para a execução do aplicativo
-COPY package.json package-lock.json ./
+# Instala apenas as dependências necessárias para produção
+RUN npm ci --only=production
 
-# Instale as dependências com npm
-RUN npm install --omit=dev
+# Copia o script de inicialização
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
-# Crie o usuário Natan e configure permissões
-RUN useradd -m Natan && chown -R Natan /app
+# Cria usuário não-root para rodar o app
+RUN addgroup -S appgroup && adduser -S Natan -G appgroup
 
-# Troque para o usuário Natan
+# Define permissões corretas antes de trocar de usuário
+RUN chown -R Natan:appgroup /app
+
+# Troca para o usuário não-root
 USER Natan
 
-# Exponha a porta do aplicativo (substitua pela porta real do seu aplicativo, se necessário)
+# Expor a porta do aplicativo
 EXPOSE 3000
 
-# Inicie o aplicativo
-CMD ["npm", "run", "start:prod"]
+# Usa o script como ponto de entrada
+ENTRYPOINT ["/entrypoint.sh"]
