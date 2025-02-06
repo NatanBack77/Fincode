@@ -1,53 +1,43 @@
-# Etapa de build
-FROM node:20-alpine AS build
+# Use uma imagem Node.js para construção
+FROM node:lts-bullseye AS build
 
-# Diretório de trabalho
+# Crie o diretório de trabalho na imagem
 WORKDIR /app
 
-# Copia apenas arquivos essenciais para instalar as dependências
+# Copie os arquivos de configuração do projeto
 COPY package.json package-lock.json tsconfig.build.json ./
 COPY prisma ./prisma/
-
-# Instala apenas as dependências necessárias para produção
-RUN npm ci
-
-# Copia o restante do código
 COPY . .
 
-# Gera os arquivos do Prisma
+# Instale as dependências com npm
+RUN npm install
+
 RUN npx prisma generate
 
-# Compila o código TypeScript
-RUN npm run build
+# Compile o código TypeScript
+RUN npm run build && npm prune --production
 
-# Remover dependências de desenvolvimento
-RUN npm prune --production
+# Fase de construção concluída
+# Os artefatos de construção estão no diretório /app/dist
 
-# Etapa de execução
-FROM node:20-alpine AS runtime
+# Use uma imagem Node.js menor para a execução
+FROM node:bullseye-slim 
 
-USER node
-
-# Diretório de trabalho
+# Crie o diretório de trabalho na imagem de execução
 WORKDIR /app
 
-# Instala pacotes necessários (caso precise do OpenSSL)
-RUN apk add --no-cache openssl
-
-# Copia os arquivos da fase de build
+# Copie os artefatos de construção da fase anterior
 COPY --from=build /app/prisma ./prisma
 COPY --from=build /app/dist ./dist
-COPY --from=build /app/package.json /app/package-lock.json ./
 
-# Instala apenas as dependências necessárias para produção
-RUN npm ci --only=production
+# Copie apenas os arquivos necessários para a execução do aplicativo
+COPY package*.json  ./
 
-# Copia o script de inicialização
-COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+# Instale as dependências com npm apenas para a execução
+RUN npm install --production
 
-# Expor a porta do aplicativo
+# Exponha a porta do aplicativo (substitua pela porta real do seu aplicativo, se necessário)
 EXPOSE 3000
 
-# Usa o script como ponto de entrada
-ENTRYPOINT ["/entrypoint.sh"]
+# Inicie o aplicativo
+CMD [ "npm", "start" ]
