@@ -9,7 +9,7 @@ COPY package.json package-lock.json tsconfig.build.json ./
 COPY prisma ./prisma/
 
 # Instala apenas as dependências necessárias para produção
-RUN npm ci --only=production
+RUN npm ci
 
 # Copia o restante do código
 COPY . .
