@@ -26,6 +26,8 @@ RUN npm prune --production
 # Etapa de execução
 FROM node:20-alpine AS runtime
 
+USER node
+
 # Diretório de trabalho
 WORKDIR /app
 
@@ -43,15 +45,6 @@ RUN npm ci --only=production
 # Copia o script de inicialização
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
-
-# Cria usuário não-root para rodar o app
-RUN addgroup -S appgroup && adduser -S Natan -G appgroup
-
-# Define permissões corretas antes de trocar de usuário
-RUN chown -R Natan:appgroup /app
-
-# Troca para o usuário não-root
-USER Natan
 
 # Expor a porta do aplicativo
 EXPOSE 3000
