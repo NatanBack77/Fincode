@@ -29,9 +29,6 @@ FROM node:bullseye-slim AS runtime
 # Diretório de trabalho
 WORKDIR /app
 
-# Instala pacotes necessários (caso precise do OpenSSL)
-RUN apk add --no-cache openssl
-
 # Copia os arquivos da fase de build
 COPY --from=build /app/prisma ./prisma
 COPY --from=build /app/dist ./dist
