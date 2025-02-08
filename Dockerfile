@@ -41,12 +41,6 @@ RUN npm ci --only=production
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# Cria usuário não-root para rodar o app
-RUN addgroup -S appgroup && adduser -S Natan -G appgroup
-
-# Define permissões corretas antes de trocar de usuário
-RUN chown -R Natan:appgroup /app
-
 # Troca para o usuário não-root
 USER Natan
 
