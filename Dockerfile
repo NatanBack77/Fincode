@@ -1,11 +1,11 @@
 # Etapa de build
-FROM node:20-alpine AS build
+FROM node:lts-bullseye AS build
 
 # Diretório de trabalho
 WORKDIR /app
 
 # Copia apenas arquivos essenciais para instalar as dependências
-COPY package.json package-lock.json tsconfig.build.json ./
+COPY package*.json tsconfig.build.json ./
 COPY prisma ./prisma/
 
 # Instala apenas as dependências necessárias para produção
@@ -24,7 +24,7 @@ RUN npm run build
 RUN npm prune --production
 
 # Etapa de execução
-FROM node:20-alpine AS runtime
+FROM node:bullseye-slim AS runtime
 
 # Diretório de trabalho
 WORKDIR /app
