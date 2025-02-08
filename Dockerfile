@@ -41,9 +41,6 @@ RUN npm ci --only=production
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# Troca para o usuário não-root
-USER Natan
-
 # Expor a porta do aplicativo
 EXPOSE 3000
 
