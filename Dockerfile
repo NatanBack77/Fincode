@@ -41,6 +41,8 @@ RUN npm ci --only=production
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
+# Trocando pra um usuário não-root
+USER node
 # Expor a porta do aplicativo
 EXPOSE 3000
 
