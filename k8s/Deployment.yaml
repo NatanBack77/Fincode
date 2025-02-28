@@ -1,34 +1,119 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-secret
+type: Opaque
+data:
+  POSTGRES_USER: ZmluY29kZQ==
+  POSTGRES_PASSWORD: UzNjcmV0
+  POSTGRES_DB: ZmluY29kZQ==
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: web-secret
+type: Opaque
+data:
+  DATABASE_URL: cG9zdGdyZXM6Ly9maW5jb2RlOlMzY3JldEBwb3N0Z3Jlczo1NDMyL2ZpbmNvZGU/c2NoZW1hPXB1YmxpYw==
+  STRIPE_API_KEY: c2tfdGVzdF81MVFJQnc2MDZuUm1SVnR2c2JtaEEyaVpFam1RY1pkblpzTkZwcHdTYTAyeXdDWG9DSjZJRkM3ZmRBTTNCWWJNZjFuMFJrcU5TQVBOQXMzWVB3ZkdSVTNCNDAwTlhwM1JXbjk=
+  STRIPE_WEBHOOK_SECRET: d2hzZWNfNjcxNmIxNzJlZWRmZTAzZTcwMjI2NzVmMDRiM2FkYzEwODgxYzQyYzU3YzBjN2U1YzlmZDNjYzI0ODdjNThhNg==
+  REDISCLOUD_URL: cmVkaXM6Ly9yZWRpczo2Mzc5
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: test
+  name: postgres
 spec:
-  replicas: 1
   selector:
     matchLabels:
-      app: test
+      app: postgres
   template:
     metadata:
       labels:
-        app: test
+        app: postgres
     spec:
       containers:
-        - image: natandevback707/stripe-api-nestjs:latest
-          name: stripe
+        - name: postgres
+          image: postgres:15.0
           ports:
-            - containerPort: 8000
+            - containerPort: 5432
+          envFrom:
+            - secretRef:
+                name: postgres-secret
 
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: name
+  name: postgres
 spec:
   selector:
-    app: test
+    app: postgres
   ports:
-    - port: 80
-      targetPort: 8080
+    - port: 5432
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+spec:
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis
+          ports:
+            - containerPort: 6379
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+spec:
+  selector:
+    app: redis
+  ports:
+    - port: 6379
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+spec:
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+        - name: web
+          image: natandevback707/stripe-api-nestjs:latest 
+          ports:
+            - containerPort: 3000
+          envFrom:
+            - secretRef:
+                name: web-secret
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+spec:
+  selector:
+    app: web
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 3000
       nodePort: 30000
-      protocol: TCP
   type: NodePort
